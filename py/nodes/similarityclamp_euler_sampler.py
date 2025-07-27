@@ -305,11 +305,11 @@ class SimilarityClampEulerSamplerNode:
             default=1.0,
             tooltip="If this is negative, the arguments to the blend function will be flipped. The similarity is multiplied by the absolute value here.",
         )
-        .req_int_first_clamp(
+        .req_int_first_clamp_step(
             default=1,
             tooltip="First step the clamp function will be applied. When negative, steps count from the end.",
         )
-        .req_int_last_clamp(
+        .req_int_last_clamp_step(
             default=-2,
             tooltip="Last step the clamp function will be applied. When negative, steps count from the end.",
         )
