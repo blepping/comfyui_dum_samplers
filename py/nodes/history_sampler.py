@@ -7,6 +7,8 @@ import torch
 from comfy.model_management import device_supports_non_blocking
 from comfy.samplers import KSAMPLER
 
+from .base import DumInputTypes
+
 
 class HistorySamplerConfig:
     def __init__(self, *, wrapped_sampler, save_mode, append_sampler_result=False):
@@ -67,20 +69,15 @@ class HistorySamplerNode:
     RETURN_TYPES = ("SAMPLER",)
     FUNCTION = "go"
 
-    @classmethod
-    def INPUT_TYPES(cls) -> dict:
-        return {
-            "required": {
-                "sampler": ("SAMPLER",),
-            },
-            "optional": {
-                "save_mode": (
-                    ("denoised", "model_input", "both", "disable"),
-                    {"default": "denoised"},
-                ),
-                "append_sampler_result": ("BOOLEAN", {"default": False}),
-            },
-        }
+    INPUT_TYPES = (
+        DumInputTypes()
+        .req_sampler()
+        .opt_field_save_mode(
+            ("denoised", "model_input", "both", "disable"),
+            default="denoised",
+        )
+        .req_bool_append_sampler_result()
+    )
 
     @classmethod
     def go(

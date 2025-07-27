@@ -3,10 +3,8 @@
 # Usage: Place this file in the custom_nodes directory and restart ComfyUI+refresh browser.
 #        It will add a SimilarityClampEulerSampler node that can be used with SamplerCustom, etc.
 
-import sys
 from typing import NamedTuple
 
-import nodes
 import torch
 from comfy import model_sampling
 from comfy.k_diffusion.sampling import get_ancestral_step
@@ -14,27 +12,8 @@ from comfy.samplers import KSAMPLER
 from tqdm import tqdm
 from tqdm.auto import trange
 
-BLEND_MODES = None
-
-
-def _ensure_blend_modes():
-    global BLEND_MODES  # noqa: PLW0603
-    if BLEND_MODES is None:
-        bi = sys.modules.get("_blepping_integrations", {}) or getattr(
-            nodes,
-            "_blepping_integrations",
-            {},
-        )
-        bleh = bi.get("bleh")
-        if bleh is not None:
-            BLEND_MODES = bleh.py.latent_utils.BLENDING_MODES
-        else:
-            BLEND_MODES = {
-                "lerp": torch.lerp,
-                "a_only": lambda a, _b, _t: a,
-                "b_only": lambda _a, b, _t: b,
-                "subtract_b": lambda a, b, t: a - b * t,
-            }
+from .. import utils
+from .base import DumInputTypes, DumLazyInputTypes
 
 
 class Config(NamedTuple):
@@ -188,7 +167,7 @@ class SimClampEulerSampler:
         x = self.x
         noise_sampler = self.noise_sampler
         config = self.config
-        blend = BLEND_MODES[config.blend_mode]
+        blend = utils.BLENDING_MODES[config.blend_mode]
         denoised_prev = None
         steps = len(self.sigmas) - 1
         first_clamp_step, last_clamp_step = fix_step_range(
@@ -298,62 +277,70 @@ class SimilarityClampEulerSamplerNode:
     RETURN_TYPES = ("SAMPLER",)
     FUNCTION = "go"
 
-    @classmethod
-    def INPUT_TYPES(cls):
-        _ensure_blend_modes()
-        return {
-            "required": {
-                "eta": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1000.0}),
-                "s_noise": ("FLOAT", {"default": 1.0, "min": -1000.0, "max": 1000.0}),
-                "min_blend": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0}),
-                "max_blend": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0}),
-                "blend_mode": (tuple(BLEND_MODES), {"default": "lerp"}),
-                "dim": ("INT", {"default": 1, "min": -100, "max": 100}),
-                "flatten": ("BOOLEAN", {"default": True}),
-                "similarity_multiplier": (
-                    "FLOAT",
-                    {
-                        "default": 1.0,
-                        "min": -100.0,
-                        "max": 100.0,
-                        "tooltip": "If this is negative, the arguments to the blend function will be flipped. The similarity is multiplied by the absolute value here.",
-                    },
-                ),
-                "first_clamp_step": (
-                    "INT",
-                    {"default": 1, "min": -10000, "max": 10000},
-                ),
-                "last_clamp_step": (
-                    "INT",
-                    {"default": -2, "min": -10000, "max": 10000},
-                ),
-                "first_ancestral_step": (
-                    "INT",
-                    {"default": 0, "min": -10000, "max": 10000},
-                ),
-                "last_ancestral_step": (
-                    "INT",
-                    {"default": -2, "min": -10000, "max": 10000},
-                ),
-                "history_mode": (("blended", "original"), {"default": "blended"}),
-                "similarity_mode": (
-                    (
-                        "scaled",
-                        "absolute",
-                        "scaled_flipped",
-                        "absolute_flipped",
-                        "pearson_scaled",
-                        "pearson_absolute",
-                        "pearson_scaled_flipped",
-                        "pearson_absolute_flipped",
-                    ),
-                    {
-                        "default": "scaled",
-                        "tooltip": "scaled: Puts the cosine similarity on a scale of 0 to 1.\nabsolute: Uses the absolute value, so -1 similarity becomes 1.\nscaled_flipped: Just gets reversed with 1.0 - similarity.\nabsolute_flipped: Same as above.\npearson_*: These variants subtract the mean before doing cosine similarity, otherwise they are similar to the other options.",
-                    },
-                ),
-            },
-        }
+    INPUT_TYPES = DumLazyInputTypes(
+        lambda: DumInputTypes()
+        .req_float_eta(
+            default=0.0,
+            min=0.0,
+            tooltip="This controls ancestralness. ETA will get multiplied with the similarity for non-pingpong steps so this is going to be the upper bound on ancestralness. You can set this to 0 to only use ancestralness through the pingpong thresholds.",
+        )
+        .req_float_s_noise(
+            default=1.0,
+            tooltip="Scale for added noise.",
+        )
+        .req_float_min_blend(
+            default=0.5,
+            min=0.0,
+            max=1.0,
+        )
+        .req_float_max_blend(
+            default=1.0,
+            min=0.0,
+            max=1.0,
+        )
+        .req_selectblend_blend_mode()
+        .req_int_dim(default=1)
+        .req_bool_flatten(default=True)
+        .req_float_similarity_multiplier(
+            default=1.0,
+            tooltip="If this is negative, the arguments to the blend function will be flipped. The similarity is multiplied by the absolute value here.",
+        )
+        .req_int_first_clamp(
+            default=1,
+            tooltip="First step the clamp function will be applied. When negative, steps count from the end.",
+        )
+        .req_int_last_clamp(
+            default=-2,
+            tooltip="Last step the clamp function will be applied. When negative, steps count from the end.",
+        )
+        .req_int_first_ancestral_step(
+            default=0,
+            tooltip="First step ancestralness will be enabled. When negative, steps count from the end.",
+        )
+        .req_int_last_ancestral_step(
+            default=-2,
+            tooltip="Last step ancestralness will be enabled. When negative, steps count from the end.",
+        )
+        .req_field_history_mode(
+            ("blended", "original"),
+            default="blended",
+            tooltip="original mode uses the raw output from the model (denoised), blended uses the result after clamp blending.",
+        )
+        .req_field_similarity_mode(
+            (
+                "scaled",
+                "absolute",
+                "scaled_flipped",
+                "absolute_flipped",
+                "pearson_scaled",
+                "pearson_absolute",
+                "pearson_scaled_flipped",
+                "pearson_absolute_flipped",
+            ),
+            default="scaled",
+            tooltip="scaled: Puts the cosine similarity on a scale of 0 to 1.\nabsolute: Uses the absolute value, so -1 similarity becomes 1.\nscaled_flipped: Just gets reversed with 1.0 - similarity.\nabsolute_flipped: Same as above.\npearson_*: These variants subtract the mean before doing cosine similarity, otherwise they are similar to the other options.",
+        ),
+    )
 
     @classmethod
     def go(cls, *, eta, s_noise, **kwargs: dict):

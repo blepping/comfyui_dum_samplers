@@ -4,37 +4,16 @@
 #        It will add a SimilarityAncestralEulerSampler node that can be used with SamplerCustom, etc.
 from __future__ import annotations
 
-import sys
 from typing import Callable, NamedTuple
 
-import nodes
 import torch
 from comfy import model_patcher, model_sampling
 from comfy.samplers import KSAMPLER
 from tqdm import tqdm
 from tqdm.auto import trange
 
-BLEND_MODES = None
-
-
-def _ensure_blend_modes():
-    global BLEND_MODES  # noqa: PLW0603
-    if BLEND_MODES is None:
-        bi = sys.modules.get("_blepping_integrations", {}) or getattr(
-            nodes,
-            "_blepping_integrations",
-            {},
-        )
-        bleh = bi.get("bleh")
-        if bleh is not None:
-            BLEND_MODES = bleh.py.latent_utils.BLENDING_MODES
-        else:
-            BLEND_MODES = {
-                "lerp": torch.lerp,
-                "a_only": lambda a, _b, _t: a,
-                "b_only": lambda _a, b, _t: b,
-                "subtract_b": lambda a, b, t: a - b * t,
-            }
+from .. import utils
+from .base import DumInputTypes, DumLazyInputTypes
 
 
 class Config(NamedTuple):
@@ -286,7 +265,7 @@ class SimAncestralEulerSampler:
         flipped = config.flipped
         if smode in {"simple", "simple_zeromean"}:
             flipped = not flipped
-        blend_function = BLEND_MODES[config.blend_mode]
+        blend_function = utils.BLENDING_MODES[config.blend_mode]
         steps = len(self.sigmas) - 1
         first_ancestral_step, last_ancestral_step = fix_step_range(
             steps,
@@ -473,183 +452,106 @@ class SimilarityAncestralEulerSamplerNode:
     RETURN_TYPES = ("SAMPLER",)
     FUNCTION = "go"
 
-    @classmethod
-    def INPUT_TYPES(cls):
-        _ensure_blend_modes()
-        valid_targets = (
-            "cond",
-            "uncond",
-            "denoised",
-            "x",
-            "cond_prev",
-            "uncond_prev",
-            "denoised_prev",
-            "x_prev",
+    _valid_targets = (
+        "cond",
+        "uncond",
+        "denoised",
+        "x",
+        "cond_prev",
+        "uncond_prev",
+        "denoised_prev",
+        "x_prev",
+    )
+    INPUT_TYPES = DumLazyInputTypes(
+        lambda valid_targets=_valid_targets: DumInputTypes()
+        .req_float_eta(
+            default=1.0,
+            min=0.0,
+            tooltip="This controls ancestralness. ETA will get multiplied with the similarity for non-pingpong steps so this is going to be the upper bound on ancestralness. You can set this to 0 to only use ancestralness through the pingpong thresholds.",
         )
-        return {
-            "required": {
-                "eta": (
-                    "FLOAT",
-                    {
-                        "default": 1.0,
-                        "min": 0.0,
-                        "max": 1000.0,
-                        "tooltip": "This controls ancestralness. ETA will get multiplied with the similarity for non-pingpong steps so this is going to be the upper bound on ancestralness. You can set this to 0 to only use ancestralness through the pingpong thresholds.",
-                    },
-                ),
-                "s_noise": (
-                    "FLOAT",
-                    {
-                        "default": 1.0,
-                        "min": -1000.0,
-                        "max": 1000.0,
-                        "tooltip": "Scale for added noise.",
-                    },
-                ),
-                "blend_mode": (
-                    tuple(BLEND_MODES),
-                    {
-                        "default": "lerp",
-                        "tooltip": "Blending function used when calculating steps. LERP is basically the only thing that works well, but experimenting is possible.",
-                    },
-                ),
-                "step_scale": (
-                    "FLOAT",
-                    {
-                        "default": 1.0,
-                        "min": -1000.0,
-                        "max": 1000.0,
-                        "tooltip": "Generally should be left at 1.0. Setting it to a value over 1.0 will remove more noise than expected, setting it to a value under 1.0 will remove less. A little goes a long way, if you want to change it try an increment of something like 0.01 or less.",
-                    },
-                ),
-                "pingpong_threshold_low": (
-                    "FLOAT",
-                    {
-                        "default": -1.0,
-                        "min": -1.0,
-                        "max": 1000.0,
-                        "tooltip": "Threshold (inclusive) for doing a pingpong step. Pingpong steps completely replace the noise. Uses whatever granularity you have set for similarity. Any negative value disables using the threshold, otherwise it's considered active where similarity is less or equal to this value.",
-                    },
-                ),
-                "pingpong_threshold_high": (
-                    "FLOAT",
-                    {
-                        "default": -1.0,
-                        "min": -1.0,
-                        "max": 1000.0,
-                        "tooltip": "Threshold (inclusive) for doing a pingpong step. Pingpong steps completely replace the noise. Uses whatever granularity you have set for similarity. Any negative value disables using the threshold, otherwise it's considered active where similarity is greater or equal to this value.",
-                    },
-                ),
-                "dim": (
-                    "INT",
-                    {
-                        "default": 1,
-                        "min": -100,
-                        "max": 100,
-                        "tooltip": "Controls the dimension where flattening starts and for pearson_correlation and cosine_similarity modes what dimension the calculation uses. For simple modes, this only affects flattening.",
-                    },
-                ),
-                "flatten": (
-                    "BOOLEAN",
-                    {
-                        "default": True,
-                        "tooltip": "Determines whether the tensor is flattened starting from the specified dimension.",
-                    },
-                ),
-                "flipped": (
-                    "BOOLEAN",
-                    {
-                        "default": True,
-                        "tooltip": "When enabled, the similarity is flipped. I.E. exactly the same (1.0) becomes 0.0.",
-                    },
-                ),
-                "absolute": (
-                    "BOOLEAN",
-                    {
-                        "default": False,
-                        "tooltip": "Use absolute values when calculating similarity.",
-                    },
-                ),
-                "first_ancestral_step": (
-                    "INT",
-                    {
-                        "default": 1,
-                        "min": -10000,
-                        "max": 10000,
-                        "tooltip": "First step ancestralness will be enabled. When negative, steps count from the end. Note: If the last step is greater than the first then first/last will be swapped.",
-                    },
-                ),
-                "last_ancestral_step": (
-                    "INT",
-                    {
-                        "default": -1,
-                        "min": -10000,
-                        "max": 10000,
-                        "tooltip": "Last step ancestralness will be enabled. When negative, steps count from the end. Note: If the last step is greater than the first then first/last will be swapped.",
-                    },
-                ),
-                "similarity_mode": (
-                    (
-                        "cosine_similarity",
-                        "pearson_correlation",
-                        "simple",
-                        "simple_zeromean",
-                    ),
-                    {
-                        "default": "simple_zeromean",
-                        "tooltip": "pearson_correlation and simple_zeromean modes subtract the mean before calculating similarity. The simple modes just subtract cond from uncond and put the result on a scale of -1.0 to 1.0.",
-                    },
-                ),
-                "similarity_offset": (
-                    "FLOAT",
-                    {
-                        "default": 0.0,
-                        "min": -1000.0,
-                        "max": 1000.0,
-                        "tooltip": "This is just added to the similarity after all other rescaling/flipping.",
-                    },
-                ),
-                "similarity_multiplier": (
-                    "FLOAT",
-                    {
-                        "default": 1.0,
-                        "min": -1000.0,
-                        "max": 1000.0,
-                        "tooltip": "Multiplier applied to similarity after rescaling/flipping and the offset. After multiplying, the result is clamped to be between 0.0 and 1.0.",
-                    },
-                ),
-                "target_a": (
-                    valid_targets,
-                    {
-                        "default": "uncond",
-                        "tooltip": "First target for comparisons.",
-                    },
-                ),
-                "target_b": (
-                    valid_targets,
-                    {
-                        "default": "cond",
-                        "tooltip": "Second target for comparisons.",
-                    },
-                ),
-            },
-            "optional": {
-                "operation_a": (
-                    "LATENT_OPERATION",
-                    {"tooltip": "Optional latent operation to be applied to target_a."},
-                ),
-                "operation_b": (
-                    "LATENT_OPERATION",
-                    {"tooltip": "Optional latent operation to be applied to target_a."},
-                ),
-                "operation_sim": (
-                    "LATENT_OPERATION",
-                    {
-                        "tooltip": "Optional latent operation to be applied to the calculated similarity. Note: Most latent operations probably cannot deal with flattened shapes. ",
-                    },
-                ),
-            },
-        }
+        .req_float_s_noise(
+            default=1.0,
+            tooltip="Scale for added noise.",
+        )
+        .req_selectblend_blend_mode(
+            tooltip="Blending function used when calculating steps. LERP is basically the only thing that works well, but experimenting is possible.",
+        )
+        .req_float_step_scale(
+            default=1.0,
+            tooltip="Generally should be left at 1.0. Setting it to a value over 1.0 will remove more noise than expected, setting it to a value under 1.0 will remove less. A little goes a long way, if you want to change it try an increment of something like 0.01 or less.",
+        )
+        .req_float_pingpong_threshold_low(
+            default=1.0,
+            min=1.0,
+            tooltip="Threshold (inclusive) for doing a pingpong step. Pingpong steps completely replace the noise. Uses whatever granularity you have set for similarity. Any negative value disables using the threshold, otherwise it's considered active where similarity is less or equal to this value.",
+        )
+        .req_float_pingpong_threshold_high(
+            default=1.0,
+            min=1.0,
+            tooltip="Threshold (inclusive) for doing a pingpong step. Pingpong steps completely replace the noise. Uses whatever granularity you have set for similarity. Any negative value disables using the threshold, otherwise it's considered active where similarity is greater or equal to this value.",
+        )
+        .req_int_dim(
+            default=1,
+            tooltip="Controls the dimension where flattening starts and for pearson_correlation and cosine_similarity modes what dimension the calculation uses. For simple modes, this only affects flattening.",
+        )
+        .req_bool_flatten(
+            default=True,
+            tooltip="Determines whether the tensor is flattened starting from the specified dimension.",
+        )
+        .req_bool_flipped(
+            default=True,
+            tooltip="When enabled, the similarity is flipped. I.E. exactly the same (1.0) becomes 0.0.",
+        )
+        .req_bool_absolute(tooltip="Use absolute values when calculating similarity.")
+        .req_int_first_ancestral_step(
+            default=1,
+            tooltip="First step ancestralness will be enabled. When negative, steps count from the end. Note: If the last step is greater than the first then first/last will be swapped.",
+        )
+        .req_int_last_ancestral_step(
+            default=-1,
+            tooltip="Last step ancestralness will be enabled. When negative, steps count from the end. Note: If the last step is greater than the first then first/last will be swapped.",
+        )
+        .req_field_similarity_mode(
+            (
+                "cosine_similarity",
+                "pearson_correlation",
+                "simple",
+                "simple_zeromean",
+            ),
+            default="simple_zeromean",
+            tooltip="pearson_correlation and simple_zeromean modes subtract the mean before calculating similarity. The simple modes just subtract cond from uncond and put the result on a scale of -1.0 to 1.0.",
+        )
+        .req_float_similarity_offset(
+            default=0.0,
+            tooltip="This is just added to the similarity after all other rescaling/flipping.",
+        )
+        .req_float_similarity_multiplier(
+            default=1.0,
+            tooltip="Multiplier applied to similarity after rescaling/flipping and the offset. After multiplying, the result is clamped to be between 0.0 and 1.0.",
+        )
+        .req_field_target_a(
+            valid_targets,
+            default="uncond",
+            tooltip="First target for comparisons.",
+        )
+        .req_field_target_b(
+            valid_targets,
+            default="cond",
+            tooltip="Second target for comparisons.",
+        )
+        .req_field_operation_a(
+            "LATENT_OPERATION",
+            tooltip="Optional latent operation to be applied to target_a.",
+        )
+        .req_field_operation_b(
+            "LATENT_OPERATION",
+            tooltip="Optional latent operation to be applied to target_b.",
+        )
+        .req_field_operation_sim(
+            "LATENT_OPERATION",
+            tooltip="Optional latent operation to be applied to the calculated similarity. Note: Most latent operations probably cannot deal with flattened shapes.",
+        ),
+    )
 
     @classmethod
     def go(cls, *, eta, s_noise, **kwargs: dict):

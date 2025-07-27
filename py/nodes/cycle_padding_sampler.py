@@ -10,6 +10,8 @@ import torch
 from comfy.samplers import KSAMPLER
 from tqdm import tqdm
 
+from .base import DumInputTypes
+
 
 class CPSConfig(NamedTuple):
     padding_sizes: tuple
@@ -119,61 +121,45 @@ class CyclePaddingSamplerNode:
     RETURN_TYPES = ("SAMPLER",)
     FUNCTION = "go"
 
-    @classmethod
-    def INPUT_TYPES(cls) -> dict:
-        return {
-            "required": {
-                "sampler": ("SAMPLER",),
-                "start_time": (
-                    "FLOAT",
-                    {"default": cps_defaults.start_time, "min": 0.0, "max": 1.0},
-                ),
-                "end_time": (
-                    "FLOAT",
-                    {"default": cps_defaults.end_time, "min": 0.0, "max": 1.0},
-                ),
-                "padding_mode": (
-                    (
-                        "reflect",
-                        "replicate",
-                        "circular",
-                        "zero",
-                        "noise",
-                        "noise_std",
-                    ),
-                    {
-                        "default": cps_defaults.padding_mode,
-                    },
-                ),
-                "cycle_mode": (
-                    ("model_call", "sampler_step"),
-                    {"default": cps_defaults.cycle_mode},
-                ),
-                "pad_dimension": (
-                    (
-                        "bottom",
-                        "top",
-                        "left",
-                        "right",
-                        "bottom_left",
-                        "bottom_right",
-                        "top_left",
-                        "top_right",
-                        "top_bottom",
-                        "left_right",
-                        "around",
-                        "custom",
-                    ),
-                    {"default": "bottom"},
-                ),
-                "padding_sizes": (
-                    "STRING",
-                    {
-                        "default": "4,0",
-                    },
-                ),
-            },
-        }
+    INPUT_TYPES = (
+        DumInputTypes()
+        .req_sampler()
+        .req_float_start_time(default=0.0, min=0.0, max=1.0)
+        .req_float_end_time(default=0.0, min=0.0, max=1.0)
+        .req_field_padding_mode(
+            (
+                "reflect",
+                "replicate",
+                "circular",
+                "zero",
+                "noise",
+                "noise_std",
+            ),
+            default=cps_defaults.padding_mode,
+        )
+        .req_field_cycle_mode(
+            ("model_call", "sampler_step"),
+            default=cps_defaults.cycle_mode,
+        )
+        .req_field_pad_dimension(
+            (
+                "bottom",
+                "top",
+                "left",
+                "right",
+                "bottom_left",
+                "bottom_right",
+                "top_left",
+                "top_right",
+                "top_bottom",
+                "left_right",
+                "around",
+                "custom",
+            ),
+            default="bottom",
+        )
+        .req_string_padding_sizes(default="4,0")
+    )
 
     PAD_IDXS = {  # noqa: RUF012
         "top": (2,),

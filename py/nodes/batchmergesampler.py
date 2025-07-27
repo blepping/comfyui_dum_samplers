@@ -1,8 +1,9 @@
 import operator
 
-import nodes
 import torch
 from comfy.samplers import KSAMPLER
+
+from .base import DumInputTypes, DumLazyInputTypes
 
 BLEND_MODES = None
 
@@ -11,34 +12,18 @@ class BatchMergeSampler:
     RETURN_TYPES = ("SAMPLER",)
     FUNCTION = "go"
 
-    @classmethod
-    def INPUT_TYPES(cls):
-        global BLEND_MODES  # noqa: PLW0603
-        if BLEND_MODES is None:
-            bleh = getattr(nodes, "_blepping_integrations", {}).get("bleh")
-            if bleh is not None:
-                BLEND_MODES = bleh.py.latent_utils.BLENDING_MODES
-            else:
-                BLEND_MODES = {"lerp": torch.lerp}
-
-        return {
-            "required": {
-                "sampler": ("SAMPLER",),
-                "mode": (("horizontal", "vertical"), {"default": "horizontal"}),
-                "merge_step": ("INT", {"default": 5, "min": 1}),
-                "hoverlap": ("INT", {"default": 0, "min": 0}),
-                "voverlap": ("INT", {"default": 0, "min": 0}),
-                "blend_mode": (tuple(BLEND_MODES), {"default": "lerp"}),
-                "blend_strength": (
-                    "FLOAT",
-                    {"default": 0.5, "min": -100.0, "max": 100.0},
-                ),
-            },
-            "optional": {
-                "sampler_after": ("SAMPLER",),
-                "advanced_plan": ("STRING", {"default": "", "multiline": True}),
-            },
-        }
+    INPUT_TYPES = DumLazyInputTypes(
+        lambda: DumInputTypes()
+        .req_sampler()
+        .req_field_mode(("horizontal", "vertical"), default="horizontal")
+        .req_int_merge_step(default=5, min=1)
+        .req_int_hoverlap(default=0, min=0)
+        .req_int_voverlap(default=0, min=0)
+        .req_selectblend()
+        .req_float_blend_strength(default=0.5)
+        .opt_sampler_sampler_after()
+        .opt_yaml_advanced_plan(),
+    )
 
     @classmethod
     def parse_plan(cls, plan):

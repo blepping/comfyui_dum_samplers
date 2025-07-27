@@ -9,6 +9,8 @@ from comfy.k_diffusion.sampling import get_ancestral_step
 from comfy.samplers import KSAMPLER
 from tqdm.auto import trange
 
+from .base import DumInputTypes
+
 
 class CAEulerSampler:
     def __init__(
@@ -188,17 +190,14 @@ class CacheAwareEulerSamplerNode:
     RETURN_TYPES = ("SAMPLER",)
     FUNCTION = "go"
 
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "eta": ("FLOAT", {"default": 0.5}),
-                "s_noise": ("FLOAT", {"default": 1.0}),
-                "similarity_threshold": ("FLOAT", {"default": 0.7}),
-                "similarity_mode": (("normal", "last_step"), {"default": "normal"}),
-                "first_ancestral_step": ("INT", {"default": 1, "min": 1}),
-            },
-        }
+    INPUT_TYPES = (
+        DumInputTypes()
+        .req_float_eta(default=0.5)
+        .req_float_s_noise(default=1.0)
+        .req_float_similarity_threshold(default=0.7)
+        .req_field_similarity_mode(("normal", "last_step"), default="normal")
+        .req_int_first_ancestral_step(default=1, min=1)
+    )
 
     @classmethod
     def go(
