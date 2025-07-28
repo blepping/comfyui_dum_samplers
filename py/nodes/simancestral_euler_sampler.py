@@ -482,12 +482,12 @@ class SimilarityAncestralEulerSamplerNode:
         )
         .req_float_pingpong_threshold_low(
             default=1.0,
-            min=1.0,
+            min=-1.0,
             tooltip="Threshold (inclusive) for doing a pingpong step. Pingpong steps completely replace the noise. Uses whatever granularity you have set for similarity. Any negative value disables using the threshold, otherwise it's considered active where similarity is less or equal to this value.",
         )
         .req_float_pingpong_threshold_high(
             default=1.0,
-            min=1.0,
+            min=-1.0,
             tooltip="Threshold (inclusive) for doing a pingpong step. Pingpong steps completely replace the noise. Uses whatever granularity you have set for similarity. Any negative value disables using the threshold, otherwise it's considered active where similarity is greater or equal to this value.",
         )
         .req_int_dim(
@@ -539,15 +539,15 @@ class SimilarityAncestralEulerSamplerNode:
             default="cond",
             tooltip="Second target for comparisons.",
         )
-        .req_field_operation_a(
+        .opt_field_operation_a(
             "LATENT_OPERATION",
             tooltip="Optional latent operation to be applied to target_a.",
         )
-        .req_field_operation_b(
+        .opt_field_operation_b(
             "LATENT_OPERATION",
             tooltip="Optional latent operation to be applied to target_b.",
         )
-        .req_field_operation_sim(
+        .opt_field_operation_sim(
             "LATENT_OPERATION",
             tooltip="Optional latent operation to be applied to the calculated similarity. Note: Most latent operations probably cannot deal with flattened shapes.",
         ),
