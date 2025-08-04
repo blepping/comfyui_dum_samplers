@@ -273,6 +273,7 @@ class SimAncestralEulerSampler:
             config.last_ancestral_step,
         )
         denoised_prev = uncond_prev = cond_prev = x_prev = None
+        initial_x = x / self.sigmas[0]
         for idx in trange(steps, disable=self.disable):
             target_a_s = target_b_s = sim = x_next = denoised = uncond = cond = eta = (
                 None
@@ -298,6 +299,12 @@ class SimAncestralEulerSampler:
                 "cond_prev": cond_prev,
                 "uncond_prev": uncond_prev,
                 "x_prev": x_prev,
+                "x_initial": initial_x,
+                "noise_pred": (x - denoised) / sigma,
+                "noise_pred_cond": (x - cond) / sigma if cond is not None else None,
+                "noise_pred_uncond": (x - uncond) / sigma
+                if uncond is not None
+                else None,
             }
             denoised_prev = denoised.clone()
             cond_prev = cond.clone() if cond is not None else None
@@ -465,6 +472,10 @@ class SimilarityAncestralEulerSamplerNode:
         "uncond_prev",
         "denoised_prev",
         "x_prev",
+        "x_initial",
+        "noise_pred",
+        "noise_pred_cond",
+        "noise_pred_uncond",
     )
     INPUT_TYPES = DumLazyInputTypes(
         lambda valid_targets=_valid_targets: DumInputTypes()
@@ -485,12 +496,12 @@ class SimilarityAncestralEulerSamplerNode:
             tooltip="Generally should be left at 1.0. Setting it to a value over 1.0 will remove more noise than expected, setting it to a value under 1.0 will remove less. A little goes a long way, if you want to change it try an increment of something like 0.01 or less.",
         )
         .req_float_pingpong_threshold_low(
-            default=1.0,
+            default=-1.0,
             min=-1.0,
             tooltip="Threshold (inclusive) for doing a pingpong step. Pingpong steps completely replace the noise. Uses whatever granularity you have set for similarity. Any negative value disables using the threshold, otherwise it's considered active where similarity is less or equal to this value.",
         )
         .req_float_pingpong_threshold_high(
-            default=1.0,
+            default=-1.0,
             min=-1.0,
             tooltip="Threshold (inclusive) for doing a pingpong step. Pingpong steps completely replace the noise. Uses whatever granularity you have set for similarity. Any negative value disables using the threshold, otherwise it's considered active where similarity is greater or equal to this value.",
         )
