@@ -3,9 +3,8 @@ import operator
 import torch
 from comfy.samplers import KSAMPLER
 
+from .. import utils
 from .base import DumInputTypes, DumLazyInputTypes
-
-BLEND_MODES = None
 
 
 class BatchMergeSampler:
@@ -189,7 +188,7 @@ class BatchMergeSampler:
         else:
             plan = None
 
-        blend = BLEND_MODES[blend_mode]
+        blend = utils.BLENDING_MODES[blend_mode]
 
         def sampler_fun(
             model,

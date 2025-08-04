@@ -278,7 +278,11 @@ class SimAncestralEulerSampler:
                 None
             )
             sigma, sigma_next = self.sigmas[idx : idx + 2]
-            sigma_next = sigma + (sigma_next - sigma) * config.step_scale
+            sigma_next = (
+                sigma + (sigma_next - sigma) * config.step_scale
+                if sigma_next != 0
+                else sigma_next
+            )
             use_eta = noise_sampler is not None and (
                 first_ancestral_step <= idx <= last_ancestral_step
             )
