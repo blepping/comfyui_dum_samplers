@@ -1,13 +1,10 @@
 # By https://github.com/blepping
 # LICENSE: Apache2
-# Usage: Place this file in the custom_nodes directory and restart ComfyUI+refresh browser.
-#        It will add a SimilarityClampEulerSampler node that can be used with SamplerCustom, etc.
 
 from typing import NamedTuple
 
 import torch
 from comfy import model_sampling
-from comfy.k_diffusion.sampling import get_ancestral_step
 from comfy.samplers import KSAMPLER
 from tqdm import tqdm
 from tqdm.auto import trange
@@ -29,52 +26,6 @@ class Config(NamedTuple):
     similarity_multiplier: float = 1.0
     history_mode: str = "blended"
     similarity_mode: str = "scaled"
-
-
-def get_ancestral_step_ext(sigma, sigma_next, eta=1.0, is_rf=False):
-    if sigma_next == 0 or eta == 0:
-        return sigma_next, sigma_next * 0.0, 1.0
-    if not is_rf:
-        return (*get_ancestral_step(sigma, sigma_next, eta=eta), 1.0)
-    # Referenced from ComfyUI.
-    downstep_ratio = 1.0 + (sigma_next / sigma - 1.0) * eta
-    sigma_down = sigma_next * downstep_ratio
-    alpha_ip1, alpha_down = 1.0 - sigma_next, 1.0 - sigma_down
-    sigma_up = (sigma_next**2 - sigma_down**2 * alpha_ip1**2 / alpha_down**2) ** 0.5
-    x_coeff = alpha_ip1 / alpha_down
-    return sigma_down, sigma_up, x_coeff
-
-
-def internal_step(
-    x,
-    denoised,
-    sigma,
-    sigma_next,
-    sigma_down,
-    sigma_up,
-    x_coeff,
-    noise_sampler,
-    *,
-    blend_function=torch.lerp,
-):
-    x = blend_function(denoised, x, sigma_down / sigma)
-    if sigma_up == 0 or noise_sampler is None:
-        return x
-    noise = noise_sampler(sigma, sigma_next).mul_(sigma_up)
-    if x_coeff != 1:
-        # x gets scaled for flow models.
-        x *= x_coeff
-    return x.add_(noise)
-
-
-def fix_step_range(steps, start, end):
-    if start < 0:
-        start = steps + start
-    if end < 0:
-        end = steps + end
-    start = max(0, min(steps - 1, start))
-    end = max(0, min(steps - 1, end))
-    return (end, start) if start > end else (start, end)
 
 
 class SimClampEulerSampler:
@@ -170,12 +121,12 @@ class SimClampEulerSampler:
         blend = utils.BLENDING_MODES[config.blend_mode]
         denoised_prev = None
         steps = len(self.sigmas) - 1
-        first_clamp_step, last_clamp_step = fix_step_range(
+        first_clamp_step, last_clamp_step = utils.fix_step_range(
             steps,
             config.first_clamp_step,
             config.last_clamp_step,
         )
-        first_ancestral_step, last_ancestral_step = fix_step_range(
+        first_ancestral_step, last_ancestral_step = utils.fix_step_range(
             steps,
             config.first_ancestral_step,
             config.last_ancestral_step,
@@ -189,7 +140,7 @@ class SimClampEulerSampler:
                 config.similarity_multiplier != 0
                 and first_clamp_step <= idx <= last_clamp_step
             )
-            sigma_down, sigma_up, x_coeff = get_ancestral_step_ext(
+            sigma_down, sigma_up, x_coeff = utils.get_ancestral_step_ext(
                 sigma,
                 sigma_next,
                 eta=self.eta if use_eta else 0.0,
@@ -259,7 +210,7 @@ class SimClampEulerSampler:
             if sigma_next <= 1e-06:
                 return denoised
             self.callback(idx, x, sigma, denoised)
-            x = internal_step(
+            x = utils.internal_step(
                 x,
                 denoised,
                 sigma,

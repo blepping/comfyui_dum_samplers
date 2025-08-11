@@ -1,8 +1,10 @@
 from .nodes import (
     batchmergesampler,
+    butchertableau_sampler,
     cacheaware_euler_sampler,
     cycle_padding_sampler,
     history_sampler,
+    letmehelpyou_sampler,
     pingpongsampler,
     simancestral_euler_sampler,
     similarityclamp_euler_sampler,
@@ -10,9 +12,11 @@ from .nodes import (
 
 _modules = (
     batchmergesampler,
+    butchertableau_sampler,
     cacheaware_euler_sampler,
     cycle_padding_sampler,
     history_sampler,
+    letmehelpyou_sampler,
     pingpongsampler,
     simancestral_euler_sampler,
     similarityclamp_euler_sampler,

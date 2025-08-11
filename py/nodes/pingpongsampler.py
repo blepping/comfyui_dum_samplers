@@ -1,7 +1,5 @@
 # By https://github.com/blepping
 # LICENSE: Apache2
-# Usage: Place this file in the custom_nodes directory and restart ComfyUI+refresh browser.
-#        It will add a PingPongSampler node that can be used with SamplerCustom, etc.
 
 import random
 

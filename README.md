@@ -75,6 +75,13 @@ This one was designed to make ancestral sampling play better with FBCache/TeaCac
 It can be used to suppress ancestralness while the model is returning similar results. You could
 also just use it as an ancestral Euler sampler that lets you control when ancestralness start.
 
+#### `ButcherTableauSampler`
+
+I'd call this useful-ish at least. You can manually enter a Butcher tableau or use one of the presets.
+It also let's use use a blend-based step function with the ability to control start/end steps for that
+and ancestralness so if nothing else it's a sampler with more precise ancestral step control.
+(Added 20250811.)
+
 ***
 
 ### ⬤ Toys
@@ -100,6 +107,20 @@ a blend between `denoised` at the current step and the previous.
 The default configuration (mode `scaled`) does a `LERP(denoised_prev, denoised, similarity)` so you get
 more `denoised` the more similar the prediction is compared to the last step. The default `min_blend`
 will use at least 50% of `denoised` from the current step.
+
+#### `LetMeHelpYouSampler`
+
+We know what noise we put in so what if we help the model out a bit and let it make a perfect prediction?
+Or at least something closer to a perfect prediction. Genius idea, right? Except if models actually *could*
+predict the noise we put in then we'd end up with whatever the original image was (an empty latent in the case
+of text to image).  If you think about it, it's good that models suck at the training objective since we do not
+actually want the model to be able predict noise.
+
+The sampler has inputs for setting the initial latent (clean image) or directly overriding what we'll treat as
+"initial noise". I haven't really tried yet but you might be able to use that to steer sampling toward or maybe
+away from the latent or noise you connect there. This might belong in the "What Is This Garbage?" section, still testing
+it but I've gotten some decent results. (Added 20250811.)
+
 
 ***
 

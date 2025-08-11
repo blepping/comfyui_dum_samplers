@@ -1,6 +1,5 @@
 # By https://github.com/blepping
 # LICENSE: Apache2
-# WIP, in development.
 
 from __future__ import annotations
 

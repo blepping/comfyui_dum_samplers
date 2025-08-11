@@ -1,7 +1,6 @@
 # By https://github.com/blepping
 # LICENSE: Apache2
-# Usage: Place this file in the custom_nodes directory and restart ComfyUI+refresh browser.
-#        It will add a SimilarityAncestralEulerSampler node that can be used with SamplerCustom, etc.
+
 from __future__ import annotations
 
 from typing import Callable, NamedTuple
@@ -121,16 +120,6 @@ def internal_step(
         # x gets scaled for flow models.
         x *= x_coeff
     return x.add_(noise)
-
-
-def fix_step_range(steps, start, end):
-    if start < 0:
-        start = steps + start
-    if end < 0:
-        end = steps + end
-    start = max(0, min(steps - 1, start))
-    end = max(0, min(steps - 1, end))
-    return (end, start) if start > end else (start, end)
 
 
 class SimAncestralEulerSampler:
@@ -267,7 +256,7 @@ class SimAncestralEulerSampler:
             flipped = not flipped
         blend_function = utils.BLENDING_MODES[config.blend_mode]
         steps = len(self.sigmas) - 1
-        first_ancestral_step, last_ancestral_step = fix_step_range(
+        first_ancestral_step, last_ancestral_step = utils.fix_step_range(
             steps,
             config.first_ancestral_step,
             config.last_ancestral_step,

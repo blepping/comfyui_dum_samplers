@@ -1,6 +1,7 @@
 # ComfyUI sampler wrapper that saves state for every model call.
 # This ignores whatever the sampler actually returns. You will get a result of
 # batch_size * times_model_was_called latents.
+
 from __future__ import annotations
 
 import torch
